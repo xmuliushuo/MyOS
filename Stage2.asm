@@ -9,7 +9,7 @@
 ; We do not have the limitation of 512 bytes here,
 ; so we can add anything we want here!
  
-org 0x0		; offset to 0, we will set segments later
+org 0x500
  
 bits 16		; we are still in real mode
  
@@ -23,28 +23,78 @@ jmp main	; jump to main
 ;************************************************;
  
 Print:
+	pusha
+.loop:
 	lodsb		; load next byte from string from SI to AL
 	or	al, al	; Does AL=0?
 	jz	PrintDone	; Yep, null terminator found-bail out
 	mov	ah,	0eh	; Nope-Print the character
 	int	10h
-	jmp	Print	; Repeat until null terminator found
+	jmp	.loop	; Repeat until null terminator found
 PrintDone:
+	popa
 	ret		; we are done, so return
  
-;*************************************************;
+;************************************************;
 ;	Second Stage Loader Entry Point
 ;************************************************;
- 
+
+
+;************************************************;
+;	GDT
+;************************************************;
+gdt:
+	dd	0
+	dd	0
+; code desriptor
+	dw	0FFFFh 		; limit low
+	dw	0 		; base low
+	db	0 		; base middle
+	db	10011010b 	; access
+	db	11001111b 	; granularity
+	db	0 		; base high
+; data descriptor
+	dw	0FFFFh		; limit low (Same as code)
+	dw	0 		; base low
+	db	0 		; base middle
+	db	10010010b	; access
+	db	11001111b	; granularity
+	db	0		; base high
+end_of_gdt:
+toc:
+	dw	end_of_gdt - gdt - 1
+	dd	gdt
+
 main:
-	cli		; clear interrupts
-	push	cs	; Insure DS=CS
-	pop	ds
+	cli		; 设置段寄存器
+	xor	ax, ax
+	mov	ds, ax
+	mov	es, ax
+	mov	ax, 0x9000
+	mov	ss, ax
+	mov	sp, 0xFFFF
+	sti
  
 	mov	si, Msg
 	call	Print
- 	cli		; clear interrupts to prevent triple faults
-	hlt		; hault the system
+ 	
+	cli		
+	lgdt	[toc]
+	mov	eax, cr0
+	or	eax, 1
+	mov	cr0, eax
+	jmp	08h:pmode
+
+bits	32
+pmode:
+	mov	ax, 0x10
+	mov	ds, ax
+	mov	ss, ax
+	mov	es, ax
+	mov	esp, 9000h
+	
+stop:	cli
+	hlt
  
 ;*************************************************;
 ;	Data Section
