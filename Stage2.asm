@@ -65,6 +65,8 @@ toc:
 	dw	end_of_gdt - gdt - 1
 	dd	gdt
 
+%include "A20.inc"
+
 main:
 	cli		; 设置段寄存器
 	xor	ax, ax
@@ -80,6 +82,10 @@ main:
  	
 	cli		
 	lgdt	[toc]
+	
+	call	EnableA20_KKbrd_Out
+	cli
+	
 	mov	eax, cr0
 	or	eax, 1
 	mov	cr0, eax
