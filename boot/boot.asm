@@ -19,6 +19,7 @@ LABEL_DESC_DATA:   Descriptor    0,      DataLen-1, DA_DRW    ; Data
 LABEL_DESC_STACK:  Descriptor    0,     TopOfStack, DA_DRWA+DA_32; Stack, 32 位
 LABEL_DESC_TEST:   Descriptor 0500000h,     0ffffh, DA_DRW
 LABEL_DESC_VIDEO:  Descriptor  0B8000h,     0ffffh, DA_DRW    ; 显存首地址
+LABEL_DESC_LDT:	   Descriptor	0,	LDTLen - 1,		DA_LDT		; LDT
 ; GDT 结束
 
 GdtLen		equ	$ - LABEL_GDT	; GDT长度
@@ -33,6 +34,7 @@ SelectorData		equ	LABEL_DESC_DATA		- LABEL_GDT
 SelectorStack		equ	LABEL_DESC_STACK	- LABEL_GDT
 SelectorTest		equ	LABEL_DESC_TEST		- LABEL_GDT
 SelectorVideo		equ	LABEL_DESC_VIDEO	- LABEL_GDT
+SelectorLDT			equ LABEL_DESC_LDT		- LABEL_GDT
 ; END of [SECTION .gdt]
 
 [SECTION .data1]	 ; 数据段
@@ -112,6 +114,26 @@ LABEL_BEGIN:
 	shr	eax, 16
 	mov	byte [LABEL_DESC_STACK + 4], al
 	mov	byte [LABEL_DESC_STACK + 7], ah
+
+	; 初始化 LDT 在 GDT 中的描述符
+	xor	eax, eax
+	mov	ax, ds
+	shl	eax, 4
+	add	eax, LABEL_LDT
+	mov	word [LABEL_DESC_LDT + 2], ax
+	shr	eax, 16
+	mov	byte [LABEL_DESC_LDT + 4], al
+	mov	byte [LABEL_DESC_LDT + 7], ah
+
+	; 初始化 LDT 中的描述符
+	xor	eax, eax
+	mov	ax, ds
+	shl	eax, 4
+	add	eax, LABEL_CODE_A
+	mov	word [LABEL_LDT_DESC_CODEA + 2], ax
+	shr	eax, 16
+	mov	byte [LABEL_LDT_DESC_CODEA + 4], al
+	mov	byte [LABEL_LDT_DESC_CODEA + 7], ah
 
 	; 为加载 GDTR 作准备
 	xor	eax, eax
@@ -199,6 +221,10 @@ LABEL_SEG_CODE32:
 	call	TestWrite
 	call	TestRead
 
+	; Load LDT
+	mov 	ax, SelectorLDT
+	lldt 	ax
+	jmp 	SelectorLDTCodeA:0
 	; 到此停止
 	jmp	SelectorCode16:0
 
@@ -327,3 +353,35 @@ LABEL_GO_BACK_TO_REAL:
 Code16Len	equ	$ - LABEL_SEG_CODE16
 
 ; END of [SECTION .s16code]
+
+; LDT
+[SECTION .ldt]
+ALIGN	32
+LABEL_LDT:
+;                            段基址       段界限      属性
+LABEL_LDT_DESC_CODEA: Descriptor 0, CodeALen - 1, DA_C + DA_32 ; Code, 32 位
+
+LDTLen		equ	$ - LABEL_LDT
+
+; LDT 选择子
+SelectorLDTCodeA	equ	LABEL_LDT_DESC_CODEA	- LABEL_LDT + SA_TIL
+; END of [SECTION .ldt]
+
+
+; CodeA (LDT, 32 位代码段)
+[SECTION .la]
+ALIGN	32
+[BITS	32]
+LABEL_CODE_A:
+	mov	ax, SelectorVideo
+	mov	gs, ax			; 视频段选择子(目的)
+
+	mov	edi, (80 * 12 + 0) * 2	; 屏幕第 10 行, 第 0 列。
+	mov	ah, 0Ch			; 0000: 黑底    1100: 红字
+	mov	al, 'L'
+	mov	[gs:edi], ax
+
+	; 准备经由16位代码段跳回实模式
+	jmp	SelectorCode16:0
+CodeALen	equ	$ - LABEL_CODE_A
+; END of [SECTION .la]
