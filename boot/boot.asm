@@ -20,6 +20,10 @@ LABEL_DESC_STACK:  Descriptor    0,     TopOfStack, DA_DRWA+DA_32; Stack, 32 位
 LABEL_DESC_TEST:   Descriptor 0500000h,     0ffffh, DA_DRW
 LABEL_DESC_VIDEO:  Descriptor  0B8000h,     0ffffh, DA_DRW    ; 显存首地址
 LABEL_DESC_LDT:	   Descriptor	0,	LDTLen - 1,		DA_LDT		; LDT
+LABEL_DESC_CODE_DEST:	Descriptor	0,	SegCodeDestLen - 1, DA_C + DA_32
+
+; Gate
+LABEL_CALL_GATE_TEST:	Gate SelectorCodeDest,	0,	0,	DA_386CGate + DA_DPL0
 ; GDT 结束
 
 GdtLen		equ	$ - LABEL_GDT	; GDT长度
@@ -35,7 +39,13 @@ SelectorStack		equ	LABEL_DESC_STACK	- LABEL_GDT
 SelectorTest		equ	LABEL_DESC_TEST		- LABEL_GDT
 SelectorVideo		equ	LABEL_DESC_VIDEO	- LABEL_GDT
 SelectorLDT			equ LABEL_DESC_LDT		- LABEL_GDT
+SelectorCodeDest	equ	LABEL_DESC_CODE_DEST - LABEL_GDT
+
+SelectorCallGateTest	equ	LABEL_CALL_GATE_TEST - LABEL_GDT
 ; END of [SECTION .gdt]
+
+
+
 
 [SECTION .data1]	 ; 数据段
 ALIGN	32
@@ -135,6 +145,15 @@ LABEL_BEGIN:
 	mov	byte [LABEL_LDT_DESC_CODEA + 4], al
 	mov	byte [LABEL_LDT_DESC_CODEA + 7], ah
 
+	xor	eax, eax
+	mov ax, ds
+	shl	eax, 4
+	add	eax, LABEL_SEG_CODE_DEST
+	mov	word [LABEL_SEG_CODE_DEST + 2], ax
+	shr	eax, 16
+	mov	byte [LABEL_SEG_CODE_DEST + 4], al
+	mov	byte [LABEL_SEG_CODE_DEST + 7], ah
+
 	; 为加载 GDTR 作准备
 	xor	eax, eax
 	mov	ax, ds
@@ -221,12 +240,15 @@ LABEL_SEG_CODE32:
 	call	TestWrite
 	call	TestRead
 
+	;call	SelectorCallGateTest:0
+
 	; Load LDT
 	mov 	ax, SelectorLDT
 	lldt 	ax
 	jmp 	SelectorLDTCodeA:0
 	; 到此停止
-	jmp	SelectorCode16:0
+	;jmp	SelectorCode16:0
+	jmp $
 
 ; ------------------------------------------------------------------------
 TestRead:
@@ -385,3 +407,17 @@ LABEL_CODE_A:
 	jmp	SelectorCode16:0
 CodeALen	equ	$ - LABEL_CODE_A
 ; END of [SECTION .la]
+
+[SECTION .sdest]
+[BITS 32]
+LABEL_SEG_CODE_DEST:
+	mov	ax, SelectorVideo
+	mov	gs, ax
+	mov	edi, (80 * 12 + 0) * 2
+	mov	ah, 0Ch
+	mov	al, 'C'
+	mov	[gs:edi], ax
+
+	retf
+
+SegCodeDestLen	equ	$ - LABEL_SEG_CODE_DEST
