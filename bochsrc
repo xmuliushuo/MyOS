@@ -5,7 +5,7 @@ vgaromimage: file=/usr/share/bochs/VGABIOS-lgpl-latest
  
 # boot from floppy using our disk image -------------------------------
  
-floppya: 1_44=freedos.img, status=inserted  # Boot from drive A
+floppya: 1_44=a.img, status=inserted  # Boot from drive A
 floppyb: 1_44=pm.img, status=inserted
 display_library: sdl
 # logging and reporting -----------------------------------------------
